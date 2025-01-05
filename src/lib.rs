@@ -1,12 +1,15 @@
 #![no_std]
 
 use core::ops::Range;
-use embedded_hal::digital::{OutputPin, PinState};
+use embedded_hal::{
+    delay::DelayNs,
+    digital::{OutputPin, PinState},
+};
 use wrappers::{ShifterPin, ShifterValue, ShifterValueRange};
 
 pub mod wrappers;
 
-pub struct AdvancedShiftRegister<const N: usize, OP: OutputPin> {
+pub struct AdvancedShiftRegister<const N: usize, OP: OutputPin, Delayer: DelayNs> {
     /// Shifter data (currently set bits)
     pub shifters: [u8; N],
 
@@ -18,15 +21,25 @@ pub struct AdvancedShiftRegister<const N: usize, OP: OutputPin> {
 
     /// Latch pin
     latch_pin: OP,
+
+    /// Delayer
+    delay: Delayer,
 }
 
-impl<const N: usize, OP: OutputPin> AdvancedShiftRegister<N, OP> {
-    pub fn new(data_pin: OP, clk_pin: OP, latch_pin: OP, default_val: u8) -> Self {
+impl<const N: usize, OP: OutputPin, Delayer: DelayNs> AdvancedShiftRegister<N, OP, Delayer> {
+    pub fn new(
+        data_pin: OP,
+        clk_pin: OP,
+        latch_pin: OP,
+        default_val: u8,
+        delayer: Delayer,
+    ) -> Self {
         Self {
             shifters: [default_val; N],
             data_pin,
             clk_pin,
             latch_pin,
+            delay: delayer,
         }
     }
 
@@ -67,6 +80,8 @@ impl<const N: usize, OP: OutputPin> AdvancedShiftRegister<N, OP> {
                 let state = PinState::from(val & 1 > 0);
                 _ = self.data_pin.set_state(state);
                 val >>= 1;
+
+                self.delay.delay_ns(120);
 
                 _ = self.clk_pin.set_high();
                 _ = self.clk_pin.set_low();
